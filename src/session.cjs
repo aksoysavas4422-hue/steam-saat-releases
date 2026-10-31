@@ -8,14 +8,14 @@ function validateLogin(value) {
   if (!value || typeof value.accountName !== 'string' || typeof value.password !== 'string'
       || !value.accountName.trim() || value.accountName.length > 128
       || !value.password || value.password.length > 256) {
-    throw new Error('Kullanıcı adı ve şifreyi kontrol et.');
+    throw new Error('Check your account name and password.');
   }
   return { accountName: value.accountName.trim(), password: value.password };
 }
 function validateGames(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 32
       || value.some(id => !appId(id)) || new Set(value).size !== value.length) {
-    throw new Error('En fazla 32 Steam oyunu seç.');
+    throw new Error('Select up to 32 Steam games.');
   }
   return [...value];
 }
@@ -29,7 +29,7 @@ class Session extends EventEmitter {
     this.wallClock = wallClock;
     this.client = null;
     this.status = 'offline';
-    this.message = 'Bağlı değil.';
+    this.message = 'Disconnected.';
     this.games = [];
     this.watchedGames = [...APP_IDS];
     this.startedAt = null;
@@ -43,7 +43,7 @@ class Session extends EventEmitter {
     this.readingPlaytime = null;
   }
   emptyPlaytime() {
-    return { status: 'idle', checkedAt: null, baselineAt: null, totals: {}, baseline: {}, delta: {}, message: 'Steam süresi henüz okunmadı.' };
+    return { status: 'idle', checkedAt: null, baselineAt: null, totals: {}, baseline: {}, delta: {}, message: 'Steam playtime has not been read yet.' };
   }
   snapshot() {
     return {
@@ -56,9 +56,9 @@ class Session extends EventEmitter {
   publish() { this.emit('state', this.snapshot()); }
   clearDeadline() { clearTimeout(this.deadline); this.deadline = null; }
   login(input, tokenLogin = false) {
-    if (this.status !== 'offline') throw new Error('Önce mevcut bağlantıyı kes.');
+    if (this.status !== 'offline') throw new Error('Disconnect the current session first.');
     const details = tokenLogin ? { refreshToken: input } : validateLogin(input);
-    if (tokenLogin && (typeof input !== 'string' || input.length < 16 || input.length > 16384)) throw new Error('Geçersiz kayıtlı oturum.');
+    if (tokenLogin && (typeof input !== 'string' || input.length < 16 || input.length > 16384)) throw new Error('Invalid saved session.');
     this.elapsed = 0;
     this.disconnectKind = 'manual';
     this.playtime = this.emptyPlaytime();
@@ -68,11 +68,11 @@ class Session extends EventEmitter {
       client = this.makeClient({ dataDirectory: null, autoRelogin: false, enablePicsCache: false, renewRefreshTokens: true });
     } catch {
       details.password = '';
-      this.disconnect('Steam kütüphanesi başlatılamadı. Kurulumu kontrol et.');
+      this.disconnect('Steam component unavailable. Reopen the application.');
       return;
     }
     this.status = 'connecting';
-    this.message = 'Steam bağlantısı kuruluyor. Mobil onay istenirse Steam uygulamanı kontrol et.';
+    this.message = 'Connecting to Steam. Check the Steam mobile app if approval is requested.';
     this.client = client;
     const live = () => this.client === client;
     client.on('loggedOn', () => {
@@ -82,7 +82,7 @@ class Session extends EventEmitter {
       this.guardAfter = 0;
       this.status = 'online';
       this.blocked = Boolean(client.playingState?.blocked);
-      this.message = this.blocked ? 'Hesap başka bir oturumda oyun oynuyor. İşlem başlatılmadı.' : 'Steam bağlantısı hazır. Oyun seçip başlatabilirsin.';
+      this.message = this.blocked ? 'Another game session is active. Nothing was started.' : 'Steam connected. Choose your games and start.';
       this.publish();
       void this.refreshPlaytime();
     });
@@ -94,8 +94,8 @@ class Session extends EventEmitter {
       this.guard = callback;
       this.guardAfter = lastCodeWrong ? this.wallClock() + 30000 : 0;
       this.status = 'guard';
-      this.message = lastCodeWrong ? 'Kod reddedildi. 30 saniye sonra yeni kodu gir.'
-        : domain ? 'E-postana gelen Steam Guard kodunu gir.' : 'Steam mobil uygulamasındaki Steam Guard kodunu gir.';
+      this.message = lastCodeWrong ? 'Code rejected. Wait 30 seconds before entering a new code.'
+        : domain ? 'Enter the Steam Guard code from your email.' : 'Enter the Steam Guard code from your mobile app.';
       this.publish();
     });
     client.on('playingState', blocked => {
@@ -103,22 +103,22 @@ class Session extends EventEmitter {
       this.blocked = Boolean(blocked);
       if (blocked) {
         this.stop();
-        this.message = 'Hesap başka yerde oyun oynuyor. Saat işlemi durduruldu; diğer oturuma müdahale edilmedi.';
+        this.message = 'Another game session is active. This session stopped without interrupting it.';
       } else if (this.status === 'online') {
-        this.message = 'Diğer oyun oturumu sona erdi. İstersen yeniden başlatabilirsin.';
+        this.message = 'The other game session ended. You can start again.';
       }
       this.publish();
     });
     client.on('error', error => {
       const transient = [3, 16, 20, 48].includes(error?.eresult) || ['ECONNRESET', 'ETIMEDOUT', 'ENETUNREACH', 'ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN'].includes(error?.code);
-      if (live()) this.disconnect(transient ? 'Steam bağlantısı kesildi.' : 'Steam oturumu reddedildi. Yeniden giriş gerekebilir.', transient ? 'transient' : 'auth');
+      if (live()) this.disconnect(transient ? 'Steam disconnected.' : 'Steam session rejected. You may need to sign in again.', transient ? 'transient' : 'auth');
     });
     client.on('disconnected', result => {
       const transient = result == null || [0, 3, 16, 20, 48].includes(result);
-      if (live()) this.disconnect('Steam bağlantısı kesildi.', transient ? 'transient' : 'auth');
+      if (live()) this.disconnect('Steam disconnected.', transient ? 'transient' : 'auth');
     });
     this.deadline = setTimeout(() => {
-      if (live()) this.disconnect('Giriş süresi doldu. Yeniden deneyebilirsin.');
+      if (live()) this.disconnect('Sign-in timed out. Try again.');
     }, 180000);
     this.deadline.unref?.();
     this.publish();
@@ -126,7 +126,7 @@ class Session extends EventEmitter {
       // Random logonID avoids replacing another local client session using ID 0.
       client.logOn({ ...details, logonID: randomInt(1, 0xFFFFFFFF), machineName: 'Steam Saat' });
     } catch {
-      this.disconnect('Giriş başlatılamadı. Yeniden deneyebilirsin.');
+      this.disconnect('Sign-in could not start. Try again.');
     } finally {
       details.password = '';
       details.refreshToken = '';
@@ -150,25 +150,25 @@ class Session extends EventEmitter {
       this.playtime.status = 'loading'; this.publish();
       try {
         const result = await new Promise((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('Süre okunamadı.')), 10000);
-          const done = (error, response) => { clearTimeout(timer); error ? reject(new Error('Süre okunamadı.')) : resolve(response); };
+          const timer = setTimeout(() => reject(new Error('Playtime unavailable.')), 10000);
+          const done = (error, response) => { clearTimeout(timer); error ? reject(new Error('Playtime unavailable.')) : resolve(response); };
           try {
-            if (!client.steamID || typeof client.getUserOwnedApps !== 'function') return done(new Error('Süre okunamadı.'));
+            if (!client.steamID || typeof client.getUserOwnedApps !== 'function') return done(new Error('Playtime unavailable.'));
             client.getUserOwnedApps(client.steamID, { filterAppids: this.watchedGames, includePlayedFreeGames: true, includeFreeSub: true, includeAppInfo: false }, done);
-          } catch { done(new Error('Süre okunamadı.')); }
+          } catch { done(new Error('Playtime unavailable.')); }
         });
         if (this.client !== client || !['online', 'running'].includes(this.status)) return false;
-        if (!Array.isArray(result?.apps)) throw new Error('Süre okunamadı.');
+        if (!Array.isArray(result?.apps)) throw new Error('Playtime unavailable.');
         const totals = {};
         for (const id of this.watchedGames) {
           const minutes = result.apps.find(game => game.appid === id)?.playtime_forever;
           totals[id] = Number.isSafeInteger(minutes) && minutes >= 0 ? minutes : null;
         }
-        if (!this.watchedGames.some(id => totals[id] !== null)) throw new Error('Süre okunamadı.');
+        if (!this.watchedGames.some(id => totals[id] !== null)) throw new Error('Playtime unavailable.');
         this.playtime.totals = totals;
         this.playtime.checkedAt = this.wallClock();
         this.playtime.status = 'ready';
-        this.playtime.message = 'Steam’in bildirdiği toplam süre. Güncelleme gecikebilir; artış bu uygulamaya özel olarak ölçülemez.';
+        this.playtime.message = 'Totals reported by Steam. Updates can be delayed; increases cannot be attributed solely to this app.';
         this.calculateDelta();
         if (baseline) this.setBaseline();
         this.publish();
@@ -176,7 +176,7 @@ class Session extends EventEmitter {
       } catch {
         if (this.client !== client) return false;
         this.playtime.status = 'error';
-        this.playtime.message = 'Steam süresi alınamadı. Profil gizliliği, oyun erişimi veya bağlantı etkili olabilir. Varsa önceki değer son başarılı okumadır.';
+        this.playtime.message = 'Steam playtime unavailable. Privacy, game access or connection may be the cause. Previous values show the last successful reading.';
         if (baseline) { this.playtime.baseline = {}; this.playtime.baselineAt = null; this.calculateDelta(); }
         this.publish();
         return false;
@@ -199,34 +199,34 @@ class Session extends EventEmitter {
     }
   }
   submitGuard(code) {
-    if (this.status !== 'guard' || !this.guard) throw new Error('Şu anda kod beklenmiyor.');
-    if (this.wallClock() < this.guardAfter) throw new Error('Yeni kod için 30 saniyelik beklemenin bitmesini bekle.');
-    if (typeof code !== 'string' || !/^[A-Z0-9]{5}$/i.test(code.trim())) throw new Error('5 karakterli Steam Guard kodunu kontrol et.');
+    if (this.status !== 'guard' || !this.guard) throw new Error('No code is currently requested.');
+    if (this.wallClock() < this.guardAfter) throw new Error('Wait 30 seconds before entering a new code.');
+    if (typeof code !== 'string' || !/^[A-Z0-9]{5}$/i.test(code.trim())) throw new Error('Check the five-character Steam Guard code.');
     const callback = this.guard;
     this.guard = null;
     this.status = 'connecting';
-    this.message = 'Kod Steam tarafından kontrol ediliyor.';
+    this.message = 'Steam is checking your code.';
     this.publish();
     callback(code.trim().toUpperCase());
   }
   async start(ids) {
     const games = validateGames(ids);
-    if (this.status !== 'online' || !this.client) throw new Error('Önce Steam hesabına bağlan.');
-    if (this.blocked || this.client.playingState?.blocked) throw new Error('Hesap başka yerde oyun oynuyor.');
+    if (this.status !== 'online' || !this.client) throw new Error('Connect to Steam first.');
+    if (this.blocked || this.client.playingState?.blocked) throw new Error('Another game session is active.');
     const client = this.client;
     if (this.readingPlaytime?.client === client) await this.readingPlaytime.promise;
     this.watchedGames = [...new Set([...APP_IDS, ...games])];
     await this.refreshPlaytime({ baseline: true });
-    if (this.client !== client || this.status !== 'online' || this.blocked || client.playingState?.blocked) throw new Error('Bağlantı veya oyun durumu değişti.');
+    if (this.client !== client || this.status !== 'online' || this.blocked || client.playingState?.blocked) throw new Error('Connection or game state changed.');
     // Never use force=true or kickPlayingSession().
     this.games = games;
     this.elapsed = 0;
     this.startedAt = this.clock();
     this.status = 'running';
-    this.message = 'Seçili oyunlar Steam’e bildirildi. Sayaç yerel oturum süresidir; Steam saati garantisi değildir.';
+    this.message = 'Selected games reported to Steam. The local timer does not guarantee Steam playtime.';
     try { this.client.gamesPlayed(games, false); }
     catch {
-      this.disconnect('Oyun bildirimi gönderilemedi. Bağlantı kapatıldı.');
+      this.disconnect('Game activity could not be reported. Connection closed.');
       return;
     }
     this.publish();
@@ -242,10 +242,10 @@ class Session extends EventEmitter {
       try { this.client.gamesPlayed([], false); } catch { /* disconnect handler owns failure */ }
     }
     this.games = [];
-    if (this.status === 'online') this.message = 'Durduruldu. Yeniden başlatınca sayaç sıfırlanır.';
+    if (this.status === 'online') this.message = 'Stopped. Starting again resets the local timer.';
     this.publish();
   }
-  disconnect(message = 'Bağlantı kesildi.', kind = 'manual') {
+  disconnect(message = 'Disconnected.', kind = 'manual') {
     this.clearDeadline();
     this.stop();
     const client = this.client;

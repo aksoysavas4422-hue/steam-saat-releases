@@ -16,8 +16,10 @@ internal static class Bootstrap {
         try { entered = mutex.WaitOne(0); } catch (AbandonedMutexException) { entered = true; }
         if (!entered) return 0;
         try {
-          string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "SteamSaat");
-          string exe = Path.Combine(root, "Steam Saat.exe");
+          string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "SteamHours");
+          string legacyRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "SteamSaat");
+          if (File.Exists(Path.Combine(legacyRoot, "Steam Hours.exe"))) root = legacyRoot;
+          string exe = Path.Combine(root, "Steam Hours.exe");
           if (!File.Exists(exe)) {
             temp = Path.Combine(Path.GetTempPath(), "SteamSaat-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
@@ -41,7 +43,7 @@ internal static class Bootstrap {
         } finally { mutex.ReleaseMutex(); }
       }
     } catch {
-      MessageBox.Show("Steam Saat açılamadı. Disk alanını ve Windows koruma bildirimlerini kontrol edip yeniden dene.", "Steam Saat", MessageBoxButtons.OK, MessageBoxIcon.Error);
+      MessageBox.Show("Steam Hours could not open. Check available disk space and Windows security notifications, then try again.", "Steam Hours", MessageBoxButtons.OK, MessageBoxIcon.Error);
       return 1;
     } finally {
       // Only this invocation's randomly named temporary directory is removed.

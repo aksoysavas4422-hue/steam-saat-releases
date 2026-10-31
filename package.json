@@ -1,10 +1,10 @@
 {
   "name": "steam-saat",
-  "version": "0.6.0",
-  "author": "Steam Saat",
+  "version": "0.7.0",
+  "author": "Steam Hours",
   "repository": "https://github.com/aksoysavas4422-hue/steam-saat-releases.git",
   "private": true,
-  "description": "Yerel Steam oturumu ve FiveM kisayolu",
+  "description": "A local Steam session manager with game favorites and a FiveM shortcut",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
@@ -18,12 +18,13 @@
   "devDependencies": { "electron": "45.1.0", "electron-builder": "26.18.1" },
   "build": {
     "appId": "SteamSaat.Desktop",
-    "productName": "Steam Saat",
+    "productName": "Steam Hours",
     "directories": { "output": "dist" },
     "files": ["src/**/*", "package.json"],
     "asar": false,
-    "win": { "target": ["nsis"], "icon": "installer/app.ico", "artifactName": "SteamSaat-${version}-Setup.${ext}", "verifyUpdateCodeSignature": false },
-    "nsis": { "oneClick": true, "perMachine": false, "allowElevation": false, "createDesktopShortcut": true, "createStartMenuShortcut": true, "deleteAppDataOnUninstall": false, "installerLanguages": ["tr_TR"] },
+    "afterPack": "scripts/after-pack.cjs",
+    "win": { "target": ["nsis"], "icon": "installer/app.ico", "artifactName": "SteamHours-${version}-Setup.${ext}", "verifyUpdateCodeSignature": false },
+    "nsis": { "oneClick": true, "perMachine": false, "allowElevation": false, "createDesktopShortcut": true, "createStartMenuShortcut": true, "deleteAppDataOnUninstall": false, "installerLanguages": ["en_US", "tr_TR", "ru_RU", "zh_CN"] },
     "publish": [{ "provider": "github", "owner": "aksoysavas4422-hue", "repo": "steam-saat-releases", "releaseType": "release" }]
   }
 }

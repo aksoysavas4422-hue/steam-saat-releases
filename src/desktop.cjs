@@ -2,11 +2,11 @@
 const path = require('node:path');
 const STARTUP_NAME = 'Steam Saat';
 const STARTUP_MESSAGES = Object.freeze({
-  READ_FAILED: 'Windows başlangıç kaydı okunamadı. Windows erişim ilkeleri bu işlemi engelliyor olabilir.',
-  WRITE_FAILED: 'Windows başlangıç ayarı yazılamadı. Windows güvenlik ayarlarını veya kurum ilkelerini kontrol et.',
-  NOT_WRITTEN: 'Windows başlangıç kaydı oluşturulamadı veya doğrulanamadı. Windows erişim ilkeleri bu işlemi engelliyor olabilir.',
-  BLOCKED: 'Windows bu başlangıç kaydını devre dışı bırakmış. Görev Yöneticisi > Başlangıç uygulamaları bölümünde Steam Saat’i etkinleştir.',
-  NOT_REMOVED: 'Windows başlangıç kaydı kaldırılamadı. Görev Yöneticisi > Başlangıç uygulamaları bölümünden Steam Saat’i devre dışı bırakabilirsin.'
+  READ_FAILED: 'Windows startup could not be read. Access policies may be blocking it.',
+  WRITE_FAILED: 'Windows startup could not be saved. Check Windows security or organization policies.',
+  NOT_WRITTEN: 'Windows startup could not be verified. Access policies may be blocking it.',
+  BLOCKED: 'Windows disabled this startup entry. Enable Steam Hours in Task Manager > Startup apps.',
+  NOT_REMOVED: 'Windows startup could not be removed. Disable Steam Hours in Task Manager > Startup apps.'
 });
 class StartupError extends Error {
   constructor(code) { super(STARTUP_MESSAGES[code] || STARTUP_MESSAGES.WRITE_FAILED); this.code = code; }
@@ -39,7 +39,7 @@ function startupInfo(app, executable) {
 }
 function startupEnabled(app, executable) { return startupInfo(app, executable).enabled; }
 function setStartup(app, executable, enabled) {
-  if (typeof enabled !== 'boolean') throw new Error('Geçersiz başlangıç ayarı.');
+  if (typeof enabled !== 'boolean') throw new Error('Invalid startup setting.');
   try { app.setLoginItemSettings({ ...loginOptions(app, executable), openAtLogin: enabled, enabled }); }
   catch { throw new StartupError('WRITE_FAILED'); }
   const info = startupInfo(app, executable);
@@ -47,7 +47,7 @@ function setStartup(app, executable, enabled) {
   if (!enabled && info.registered) throw new StartupError('NOT_REMOVED');
   return info.enabled;
 }
-function makeTray({ Tray, Menu, nativeImage }, { show, start, stop, quit, state, selections }) {
+function makeTray({ Tray, Menu, nativeImage }, { show, start, stop, quit, state, selections, translate = key => key }) {
   // Local monochrome clock icon, built as pixels; no remote artwork or icon fetch.
   const side = 32, pixels = Buffer.alloc(side * side * 4);
   for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
@@ -59,16 +59,16 @@ function makeTray({ Tray, Menu, nativeImage }, { show, start, stop, quit, state,
   const tray = new Tray(nativeImage.createFromBitmap(pixels, { width: side, height: side, scaleFactor: 1 }));
   const update = () => {
     const current = state();
-    const labels = { offline: 'Bağlı değil', connecting: 'Bağlanıyor', restoring: 'Oturum açılıyor', guard: 'Steam Guard bekleniyor', online: 'Bağlı', running: 'Etkin' };
-    tray.setToolTip(`Steam Saat · ${labels[current.status] || 'Bekliyor'}`);
+    const labels = { offline: 'Disconnected', connecting: 'Connecting', restoring: 'Restoring session', guard: 'Waiting for Steam Guard', online: 'Connected', running: 'Active' };
+    tray.setToolTip(`Steam Hours · ${translate(labels[current.status] || 'Waiting')}`);
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Steam Saat’i aç', click: show },
-      { label: labels[current.status] || 'Bekliyor', enabled: false },
+      { label: 'Open Steam Hours', click: show },
+      { label: labels[current.status] || 'Waiting', enabled: false },
       { type: 'separator' },
-      { label: 'Seçili oyunları başlat', enabled: current.status === 'online' && !current.blocked && selections().length > 0, click: start },
-      { label: 'Durdur', enabled: current.status === 'running' || Boolean(current.retry?.nextAt), click: stop },
-      { type: 'separator' }, { label: 'Tamamen çıkış yap', click: quit }
-    ]));
+      { label: 'Start selected games', enabled: current.status === 'online' && !current.blocked && selections().length > 0, click: start },
+      { label: 'Stop', enabled: current.status === 'running' || Boolean(current.retry?.nextAt), click: stop },
+      { type: 'separator' }, { label: 'Quit application', click: quit }
+    ].map(item => item.label ? { ...item, label: translate(item.label) } : item)));
   };
   tray.on('double-click', show); tray.on('click', show); update();
   return { update, destroy: () => tray.destroy() };

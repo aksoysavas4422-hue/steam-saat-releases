@@ -12,6 +12,7 @@ const { Preferences, defaults } = require('./preferences.cjs');
 const { makeTray, startupEnabled, setStartup, StartupError } = require('./desktop.cjs');
 const { setupUpdates } = require('./updates.cjs');
 const { Catalog, appId } = require('./catalog.cjs');
+const i18n = require('./ui/i18n.js');
 const catalog = new Catalog();
 app.setPath('userData', path.join(app.getPath('appData'), 'steam-saat'));
 let updates, updateInterval, updateDelay;
@@ -21,7 +22,7 @@ let window;
 let worker = null;
 let serial = 0;
 let fiveMPath = null; // Path intentionally lives only for this application session.
-let cached = { status: 'offline', message: 'Bağlı değil.', games: [], elapsedMs: 0, blocked: false, guardAfter: 0 };
+let cached = { status: 'offline', message: 'Disconnected.', games: [], elapsedMs: 0, blocked: false, guardAfter: 0 };
 let receivedAt = performance.now();
 const requests = new Map();
 let tokenStore;
@@ -29,7 +30,7 @@ let initializing = true;
 let remember = true;
 let saved = false;
 let authRevision = 0;
-let saveMessage = 'Oturum bu Windows hesabında şifrelenerek hatırlanır; şifren kaydedilmez.';
+let saveMessage = 'Your session is encrypted for this Windows account. Your password is never saved.';
 let preferences, options = defaults(), tray = null;
 let startAtLogin = false, startupAvailable = false;
 let volatileToken = null, desiredGames = [], continueTimer = null;
@@ -42,13 +43,13 @@ function scheduleReconnect() {
 }
 async function connectAgain(recovery = true) {
   if (quitting || suspended || worker || initializing || manualDisconnected) return;
-  if (!volatileToken) { broadcast({ ...cached, message: 'Yeniden bağlanmak için Steam’e giriş yap.' }); return; }
+  if (!volatileToken) { broadcast({ ...cached, message: 'Sign in to Steam to reconnect.' }); return; }
   makeWorker({ recovery });
   await call('resume', volatileToken);
 }
 async function startGames(ids) {
   const games = validateGames(ids);
-  if (games.some(id => !options.favorites.some(game => game.id === id))) throw new Error('Önce oyunu favorilere ekle.');
+  if (games.some(id => !options.favorites.some(game => game.id === id))) throw new Error('Add this game to your favorites first.');
   cancelContinuation(); manualDisconnected = false; desiredGames = games;
   const result = await call('start', games);
   if (!result.ok) desiredGames = [];
@@ -77,10 +78,10 @@ async function saveToken(token) {
   try {
     await tokenStore.save(token);
     if (revision !== authRevision) return;
-    saved = true; saveMessage = 'Oturum Windows ile şifrelendi. Bir sonraki açılışta otomatik bağlanır.';
+    saved = true; saveMessage = 'Session encrypted with Windows. It will reconnect next time.';
   } catch {
     if (revision !== authRevision) return;
-    saveMessage = 'Oturum kaydedilemedi. Windows şifrelemesi veya dosya erişimi kullanılamıyor; şifresiz kayıt yapılmadı.';
+    saveMessage = 'Session could not be saved securely. No unencrypted session was written.';
   }
   publishAuth();
 }
@@ -88,7 +89,7 @@ function settleFor(child) {
   for (const [id, entry] of requests) {
     if (entry.child !== child) continue;
     clearTimeout(entry.timer);
-    entry.resolve({ ok: false, message: 'Steam işlemi kapandı. Yeniden giriş yapabilirsin.' });
+    entry.resolve({ ok: false, message: 'Steam connection closed. You can sign in again.' });
     requests.delete(id);
   }
 }
@@ -162,7 +163,7 @@ function makeWorker({ recovery = false } = {}) {
         entry.resolve(message);
       }
     } else if (message?.type === 'fatal') {
-      broadcast({ ...cached, status: 'offline', games: [], message: 'Steam kütüphanesi yüklenemedi. Önce kurulumu tamamla.' });
+      broadcast({ ...cached, status: 'offline', games: [], message: 'Steam component unavailable. Reopen the application.' });
       retire(child);
     }
   });
@@ -171,7 +172,7 @@ function makeWorker({ recovery = false } = {}) {
     if (worker !== child) return;
     worker = null;
     broadcast({ ...cached, elapsedMs: elapsed(), status: 'offline', games: [], blocked: false, guardAfter: 0,
-      message: 'Steam işlemi kapandı. Yeniden giriş yapabilirsin.' });
+      message: 'Steam connection closed. You can sign in again.' });
     scheduleReconnect();
   };
   child.on('error', failed);
@@ -181,14 +182,14 @@ function makeWorker({ recovery = false } = {}) {
 function elapsed() { return cached.elapsedMs + (cached.status === 'running' ? performance.now() - receivedAt : 0); }
 function call(action, payload) {
   const child = worker;
-  if (!child?.connected) return Promise.resolve({ ok: false, message: 'Steam bağlantısı yok.' });
+  if (!child?.connected) return Promise.resolve({ ok: false, message: 'No Steam connection.' });
   const id = ++serial;
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       requests.delete(id);
-      resolve({ ok: false, message: 'İşlem zaman aşımına uğradı. Bağlantı kapatıldı.' });
+      resolve({ ok: false, message: 'Request timed out. Connection closed.' });
       if (worker === child) {
-        broadcast({ ...cached, elapsedMs: elapsed(), status: 'offline', games: [], guardAfter: 0, message: 'İşlem zaman aşımına uğradı.' });
+        broadcast({ ...cached, elapsedMs: elapsed(), status: 'offline', games: [], guardAfter: 0, message: 'Request timed out.' });
         retire(child);
         scheduleReconnect();
       }
@@ -198,24 +199,24 @@ function call(action, payload) {
       if (!error) return;
       clearTimeout(timer);
       requests.delete(id);
-      resolve({ ok: false, message: 'Steam işlemine ulaşılamadı.' });
+      resolve({ ok: false, message: 'Steam connection unavailable.' });
     });
   });
 }
 function checkSender(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame
-      || event.senderFrame.url !== page) throw new Error('Geçersiz arayüz.');
+      || event.senderFrame.url !== page) throw new Error('Invalid interface.');
 }
 function handle(name, callback) {
   ipcMain.handle(name, async (event, payload) => {
     try { checkSender(event); return await callback(payload); }
     catch (error) {
-      return { ok: false, message: error instanceof StartupError ? error.message : 'İşlem yapılamadı. Seçimini ve bağlantını kontrol et.' };
+      return { ok: false, message: error instanceof StartupError ? error.message : 'Action failed. Check your connection and selection.' };
     }
   });
 }
 handle('login', async input => {
-  if (initializing || worker || cached.status !== 'offline') return { ok: false, message: 'Önce mevcut bağlantıyı kes.' };
+  if (initializing || worker || cached.status !== 'offline') return { ok: false, message: 'Disconnect the current session first.' };
   const details = validateLogin(input);
   manualDisconnected = false; volatileToken = null; desiredGames = []; cancelContinuation(); reconnect.cancel();
   initializing = true;
@@ -226,7 +227,7 @@ handle('login', async input => {
     // new login later fails. Never silently restore the previous account.
     await tokenStore.clear();
     saved = false;
-    saveMessage = remember ? 'Başarılı girişten sonra oturum şifrelenerek hatırlanır.' : 'Bu oturum kaydedilmeyecek.';
+    saveMessage = remember ? 'Your session will be encrypted after a successful sign-in.' : 'This session will not be saved.';
     makeWorker();
     const pending = call('login', details);
     details.password = '';
@@ -239,8 +240,8 @@ handle('login', async input => {
   }
 });
 handle('guard', code => {
-  if (typeof code !== 'string' || !/^[A-Z0-9]{5}$/i.test(code.trim())) return { ok: false, message: '5 karakterli kodu kontrol et.' };
-  if (Date.now() < cached.guardAfter) return { ok: false, message: 'Yeni kod için bekleme süresinin dolmasını bekle.' };
+  if (typeof code !== 'string' || !/^[A-Z0-9]{5}$/i.test(code.trim())) return { ok: false, message: 'Check the five-character code.' };
+  if (Date.now() < cached.guardAfter) return { ok: false, message: 'Wait before entering a new code.' };
   return call('guard', code);
 });
 handle('start', ids => startGames(ids));
@@ -250,21 +251,24 @@ handle('disconnect', () => {
   return worker ? call('disconnect') : { ok: true };
 });
 handle('retry-now', async () => {
-  if (worker || initializing) return { ok: false, message: 'Önce mevcut bağlantının tamamlanmasını bekle.' };
+  if (worker || initializing) return { ok: false, message: 'Wait for the current connection to finish.' };
   manualDisconnected = false; reconnect.cancel();
   if (!volatileToken && saved) volatileToken = await tokenStore.load();
-  if (!volatileToken) return { ok: false, message: 'Steam hesabına yeniden giriş yap.' };
+  if (!volatileToken) return { ok: false, message: 'Sign in to Steam again.' };
   await connectAgain(true); return { ok: true };
 });
 handle('preferences', async patch => {
-  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Geçersiz ayar.');
+  const previousLanguage = options.language;
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid setting.');
   for (const [key, value] of Object.entries(patch)) {
-    if (key === 'selectedGames') {
-      if (!Array.isArray(value) || value.length > 32 || value.some(id => !appId(id) || !options.favorites.some(game => game.id === id)) || new Set(value).size !== value.length) throw new Error('Geçersiz oyun.');
-    } else if (!['closeToTray', 'autoReconnect', 'autoStartOnLogin', 'startAtLogin'].includes(key) || typeof value !== 'boolean') throw new Error('Geçersiz ayar.');
+    if (key === 'language') {
+      if (!i18n.languages.includes(value)) throw new Error('Invalid setting.');
+    } else if (key === 'selectedGames') {
+      if (!Array.isArray(value) || value.length > 32 || value.some(id => !appId(id) || !options.favorites.some(game => game.id === id)) || new Set(value).size !== value.length) throw new Error('Invalid game.');
+    } else if (!['closeToTray', 'autoReconnect', 'autoStartOnLogin', 'startAtLogin'].includes(key) || typeof value !== 'boolean') throw new Error('Invalid setting.');
   }
   if (patch.startAtLogin !== undefined) {
-    if (!startupAvailable) return { ok: false, message: 'Windows başlangıç ayarlarına bu oturumda erişilemiyor.' };
+    if (!startupAvailable) return { ok: false, message: 'Windows startup settings are unavailable.' };
     try { startAtLogin = setStartup(app, process.execPath, patch.startAtLogin); }
     catch (error) {
       try { startAtLogin = startupEnabled(app, process.execPath); } catch { /* last known state */ }
@@ -272,7 +276,7 @@ handle('preferences', async patch => {
     }
     publishAuth();
   }
-  for (const key of ['closeToTray', 'autoReconnect', 'autoStartOnLogin', 'selectedGames']) if (patch[key] !== undefined) options[key] = patch[key];
+  for (const key of ['language', 'closeToTray', 'autoReconnect', 'autoStartOnLogin', 'selectedGames']) if (patch[key] !== undefined) options[key] = patch[key];
   if (patch.autoReconnect === false) { reconnect.cancel(); cancelContinuation(); }
   if (patch.autoStartOnLogin === false) { cancelContinuation(); if (cached.status !== 'running') desiredGames = []; }
   if (patch.selectedGames !== undefined && continueTimer) {
@@ -281,34 +285,35 @@ handle('preferences', async patch => {
   }
   // Startup state lives in Windows, not preferences.json. An unrelated local
   // file write must not turn a successful startup registration into an error.
-  if (Object.keys(patch).some(key => key !== 'startAtLogin')) await preferences.save(options);
+  try { if (Object.keys(patch).some(key => key !== 'startAtLogin')) await preferences.save(options); }
+  catch (error) { options.language = previousLanguage; throw error; }
   publishAuth(); return { ok: true };
 });
 handle('hide', () => {
   if (tray) { window.hide(); return { ok: true }; }
-  return { ok: false, message: 'Sistem tepsisi kullanılamıyor.' };
+  return { ok: false, message: 'System tray unavailable.' };
 });
 handle('quit', () => { app.quit(); return { ok: true }; });
 handle('check-updates', async () => { await updates?.check(); return { ok: true }; });
 handle('search-games', async term => {
-  try { return { ok: true, games: await catalog.search(term) }; }
-  catch { return { ok: false, message: 'Steam araması alınamadı. En az 2 harf yazıp biraz sonra yeniden dene.' }; }
+  try { return { ok: true, games: await catalog.search(term, options.language) }; }
+  catch { return { ok: false, message: 'Search unavailable. Enter at least two characters and try again shortly.' }; }
 });
 handle('add-favorite', async id => {
-  if (cached.status === 'running') return { ok: false, message: 'Favorileri değiştirmeden önce işlemi durdur.' };
+  if (cached.status === 'running') return { ok: false, message: 'Stop the session before changing favorites.' };
   if (options.favorites.some(game => game.id === id)) return { ok: true };
-  if (options.favorites.length >= 50) return { ok: false, message: 'En fazla 50 favori ekleyebilirsin.' };
+  if (options.favorites.length >= 50) return { ok: false, message: 'You can add up to 50 favorites.' };
   let game;
-  try { game = await catalog.game(id); }
-  catch { return { ok: false, message: 'Bu öğe oyun olarak doğrulanamadı. DLC ve paketler eklenmez.' }; }
+  try { game = await catalog.game(id, options.language); }
+  catch { return { ok: false, message: 'This item could not be verified as a game. DLC and bundles are not supported.' }; }
   // Recheck after network IO: the user may have started another action.
-  if (cached.status === 'running') return { ok: false, message: 'Önce işlemi durdur.' };
-  if (options.favorites.length >= 50) return { ok: false, message: 'En fazla 50 favori ekleyebilirsin.' };
+  if (cached.status === 'running') return { ok: false, message: 'Stop the session first.' };
+  if (options.favorites.length >= 50) return { ok: false, message: 'You can add up to 50 favorites.' };
   if (!options.favorites.some(item => item.id === id)) options.favorites.push(game);
   await preferences.save(options); publishAuth(); return { ok: true };
 });
 handle('remove-favorite', async id => {
-  if (!appId(id) || [393380, 730].includes(id) || cached.status === 'running') return { ok: false, message: 'Bu favori şu anda kaldırılamaz.' };
+  if (!appId(id) || [393380, 730].includes(id) || cached.status === 'running') return { ok: false, message: 'This favorite cannot be removed right now.' };
   options.favorites = options.favorites.filter(game => game.id !== id);
   options.selectedGames = options.selectedGames.filter(value => value !== id);
   desiredGames = desiredGames.filter(value => value !== id);
@@ -320,31 +325,31 @@ handle('forget', async () => {
   authRevision++; remember = false;
   if (worker) await call('disconnect');
   await tokenStore.clear();
-  saved = false; saveMessage = 'Kayıtlı oturum silindi. Yeniden giriş yapman gerekir.';
+  saved = false; saveMessage = 'Saved session removed. Sign in again to reconnect.';
   publishAuth();
   return { ok: true };
 });
 handle('snapshot', () => ({ ok: true, state: { ...cached, elapsedMs: elapsed() } }));
 handle('choose-fivem', async () => {
   const result = await dialog.showOpenDialog(window, {
-    title: 'FiveM.exe dosyasını seç', properties: ['openFile'],
+    title: i18n.t('Choose FiveM.exe', options.language), properties: ['openFile'],
     filters: [{ name: 'FiveM', extensions: ['exe'] }]
   });
   if (result.canceled) return { ok: true, canceled: true };
   const chosen = result.filePaths[0];
   if (!chosen || path.basename(chosen).toLowerCase() !== 'fivem.exe' || !(await stat(chosen)).isFile()) {
-    return { ok: false, message: 'FiveM.exe adlı dosyayı seç.' };
+    return { ok: false, message: 'Choose a file named FiveM.exe.' };
   }
   fiveMPath = chosen;
   options.fiveMPath = chosen; await preferences.save(options); publishAuth();
   return { ok: true, selected: true };
 });
 handle('launch-fivem', async () => {
-  if (!fiveMPath || !(await stat(fiveMPath)).isFile()) return { ok: false, message: 'Önce FiveM.exe dosyasını seç.' };
+  if (!fiveMPath || !(await stat(fiveMPath)).isFile()) return { ok: false, message: 'Choose FiveM.exe first.' };
   // No shell, interpolation, user-supplied arguments or elevation.
   return new Promise(resolve => {
     const child = spawn(fiveMPath, [], { cwd: path.dirname(fiveMPath), shell: false, detached: true, stdio: 'ignore', windowsHide: false });
-    child.once('error', () => resolve({ ok: false, message: 'FiveM açılamadı. Dosyayı yeniden seç.' }));
+    child.once('error', () => resolve({ ok: false, message: 'FiveM could not be opened. Select its file again.' }));
     child.once('spawn', () => { child.unref(); resolve({ ok: true }); });
   });
 });
@@ -368,7 +373,7 @@ else {
     if (process.platform === 'win32') {
       try { startAtLogin = startupEnabled(app, process.execPath); startupAvailable = true; } catch { /* disabled in UI */ }
     }
-    broadcast({ ...cached, status: 'restoring', message: 'Kayıtlı oturum kontrol ediliyor.' });
+    broadcast({ ...cached, status: 'restoring', message: 'Checking saved session.' });
     const isolated = electronSession.fromPartition(`steam-saat-${randomUUID()}`);
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     isolated.setPermissionCheckHandler(() => false);
@@ -377,7 +382,7 @@ else {
     });
     window = new BrowserWindow({
       width: 1230, height: 920, minWidth: 930, minHeight: 720,
-      backgroundColor: '#10151d', title: 'Steam Saat', autoHideMenuBar: true,
+      backgroundColor: '#121615', title: 'Steam Hours', autoHideMenuBar: true,
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'), session: isolated,
         nodeIntegration: false, contextIsolation: true, sandbox: true,
@@ -393,13 +398,13 @@ else {
     window.on('query-session-end', () => { shuttingDown = true; manualDisconnected = true; reconnect.cancel(); cancelContinuation(); if (worker) void call('disconnect'); });
     window.on('closed', () => { window = null; });
     try {
-      tray = makeTray({ Tray, Menu, nativeImage }, { show: showWindow, state: () => cached, selections: () => options.selectedGames,
+      tray = makeTray({ Tray, Menu, nativeImage }, { show: showWindow, state: () => cached, selections: () => options.selectedGames, translate: key => i18n.t(key, options.language),
         start: () => { void startGames(options.selectedGames); }, stop: () => { void stopGames(); }, quit: () => app.quit() });
     } catch { tray = null; }
     if (process.argv.includes('--hidden') && tray) window.hide();
     powerMonitor.on('suspend', () => {
       suspended = true; reconnect.cancel(); cancelContinuation();
-      broadcast({ ...cached, elapsedMs: elapsed(), status: 'offline', games: [], message: 'Bilgisayar uykuya geçiyor. Süre işlemi durduruldu.' });
+      broadcast({ ...cached, elapsedMs: elapsed(), status: 'offline', games: [], message: 'Computer entering sleep. Session stopped.' });
       if (worker) void call('disconnect');
     });
     powerMonitor.on('resume', () => { suspended = false; scheduleReconnect(); });
@@ -411,11 +416,11 @@ else {
         saved = true;
         makeWorker({ recovery: Boolean(autoStartAtBoot) });
         const result = await call('resume', token);
-        if (!result.ok) broadcast({ ...cached, status: 'offline', message: 'Kayıtlı oturumla bağlantı kurulamadı. Yeniden giriş yapabilir veya kaydı silebilirsin.' });
-      } else broadcast({ ...cached, status: 'offline', message: 'Bağlı değil. Steam hesabına giriş yap.' });
+        if (!result.ok) broadcast({ ...cached, status: 'offline', message: 'Saved session could not connect. Sign in again or remove it.' });
+      } else broadcast({ ...cached, status: 'offline', message: 'Disconnected. Sign in to Steam.' });
     } catch {
       saved = true;
-      saveMessage = 'Kayıtlı oturum çözülemedi. Yeniden giriş yap veya kaydı sil.';
+      saveMessage = 'Saved session could not be decrypted. Sign in again or remove it.';
       broadcast({ ...cached, status: 'offline', message: saveMessage });
     } finally { initializing = false; publishAuth(); }
   });

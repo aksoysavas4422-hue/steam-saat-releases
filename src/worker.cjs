@@ -7,7 +7,7 @@ try {
   const SteamUser = require('steam-user');
   session = new Session(options => new SteamUser(options));
 } catch {
-  send({ type: 'fatal', message: 'Steam kütüphanesi yüklenemedi. Kurulumu kontrol et.' });
+  send({ type: 'fatal', message: 'Steam component unavailable. Reopen the application.' });
   process.exitCode = 1;
 }
 if (session) {
@@ -27,12 +27,12 @@ if (session) {
         case 'playtime': await session.refreshPlaytime(); break;
         case 'disconnect': session.disconnect(); break;
         case 'state': break;
-        default: throw new Error('Geçersiz komut.');
+        default: throw new Error('Invalid command.');
       }
       send({ type: 'reply', id, ok: true, state: session.snapshot() });
     } catch {
       // Never serialize third-party exception text: it can contain input or tokens.
-      send({ type: 'reply', id, ok: false, message: 'İşlem yapılamadı. Bağlantı durumunu, seçimi veya kodu kontrol et.' });
+      send({ type: 'reply', id, ok: false, message: 'Action failed. Check your connection, selection or code.' });
     } finally {
       if (message?.action === 'login' && message.payload) message.payload.password = '';
       if (message?.action === 'guard') message.payload = '';
@@ -41,6 +41,6 @@ if (session) {
   });
   process.on('disconnect', () => { session.disconnect(); process.exit(0); });
   process.on('SIGTERM', () => { session.disconnect(); process.exit(0); });
-  process.on('uncaughtException', () => { session.disconnect('Steam işlemi kapandı.'); process.exit(1); });
-  process.on('unhandledRejection', () => { session.disconnect('Steam işlemi kapandı.'); process.exit(1); });
+  process.on('uncaughtException', () => { session.disconnect('Steam connection closed.'); process.exit(1); });
+  process.on('unhandledRejection', () => { session.disconnect('Steam connection closed.'); process.exit(1); });
 }

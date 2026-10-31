@@ -196,9 +196,9 @@ test('closing window hides to tray; explicit tray exit remains available', async
   h.window.emit('close', { preventDefault() { prevented = true; } });
   assert.equal(prevented, true); assert.equal(h.window.hidden, true);
   assert.equal(h.quitCalled(), false);
-  h.contextMenu().find(item => item.label === 'Steam Saat’i aç').click();
+  h.contextMenu().find(item => item.label === 'Open Steam Hours').click();
   assert.equal(h.window.hidden, false);
-  h.contextMenu().find(item => item.label === 'Tamamen çıkış yap').click();
+  h.contextMenu().find(item => item.label === 'Quit application').click();
   assert.equal(h.quitCalled(), true);
 });
 test('startup does not modify Windows registration until the user toggles it', async () => {
@@ -212,6 +212,21 @@ test('startup does not modify Windows registration until the user toggles it', a
   assert.equal(h.startupChanges[1].openAtLogin, false);
 });
 
+test('language is validated, restored, applied to the tray, and never sent to Steam', async () => {
+  const h = await harness({ preferences: { language: 'ru' } });
+  assert.equal((await h.call('snapshot')).state.desktop.language, 'ru');
+  assert.ok(h.contextMenu().some(item => item.label === 'Выйти из приложения'));
+  assert.equal((await h.call('preferences', { language: 'zh' })).ok, true);
+  assert.equal((await h.call('snapshot')).state.desktop.language, 'zh');
+  assert.ok(h.contextMenu().some(item => item.label === '退出应用'));
+  assert.equal((await h.call('preferences', { language: 'invalid' })).ok, false);
+  assert.equal(h.childCalls.length, 0);
+});
+test('failed language persistence restores the previous selection', async () => {
+  const h = await harness({ failPreferences: true });
+  assert.equal((await h.call('preferences', { language: 'tr' })).ok, false);
+  assert.equal((await h.call('snapshot')).state.desktop.language, 'en');
+});
 test('startup registration does not depend on an unrelated preferences file write', async () => {
   const h = await harness({ failPreferences: true });
   const result = await h.call('preferences', { startAtLogin: true });
@@ -222,7 +237,7 @@ test('blocked Windows startup shows an actionable safe message instead of generi
   const h = await harness({ startupBlocked: true });
   const result = await h.call('preferences', { startAtLogin: true });
   assert.equal(result.ok, false);
-  assert.ok(result.message.includes('Görev Yöneticisi'));
+  assert.ok(result.message.includes('Task Manager'));
   assert.equal((await h.call('snapshot')).state.desktop.startAtLogin, false);
 });
 test('hidden startup keeps a tray and explicit disconnect cancels reconnect', async () => {

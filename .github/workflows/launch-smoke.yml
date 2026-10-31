@@ -1,8 +1,5 @@
 name: Verify single EXE launch
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/launch-smoke.yml']
   workflow_run:
     workflows: ['Windows installer']
     types: [completed]
@@ -10,7 +7,7 @@ permissions:
   contents: read
 jobs:
   launch:
-    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     timeout-minutes: 8
     steps:
@@ -20,33 +17,33 @@ jobs:
         shell: pwsh
         run: |
           $repo = '${{ github.repository }}'
-          gh release download --repo $repo --pattern SteamSaat.exe --pattern SHA256SUMS.txt --dir "$env:RUNNER_TEMP/steam-saat-launch"
+          gh release download --repo $repo --pattern SteamHours.exe --pattern SHA256SUMS.txt --dir "$env:RUNNER_TEMP/steam-saat-launch"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot download application.' }
           $root = "$env:RUNNER_TEMP/steam-saat-launch"
-          $expected = Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -match '^([a-f0-9]{64})  SteamSaat\.exe$' }
+          $expected = Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -match '^([a-f0-9]{64})  SteamHours\.exe$' }
           if (-not $expected) { throw 'Missing application hash.' }
-          $actual = (Get-FileHash "$root/SteamSaat.exe" -Algorithm SHA256).Hash.ToLower()
+          $actual = (Get-FileHash "$root/SteamHours.exe" -Algorithm SHA256).Hash.ToLower()
           if ($actual -ne $expected.Substring(0,64)) { throw 'Application hash mismatch.' }
       - name: Open twice without installation UI or a Steam account
         shell: pwsh
         run: |
           $root = "$env:RUNNER_TEMP/steam-saat-launch"
-          $installed = [IO.Path]::GetFullPath("$env:LOCALAPPDATA/Programs/SteamSaat/Steam Saat.exe")
+          $installed = [IO.Path]::GetFullPath("$env:LOCALAPPDATA/Programs/SteamHours/Steam Hours.exe")
           if (Test-Path "$env:APPDATA/steam-saat/remembered-session.bin") { throw 'CI must not contain a Steam account.' }
           try {
-            $first = Start-Process -FilePath "$root/SteamSaat.exe" -PassThru -WindowStyle Hidden
+            $first = Start-Process -FilePath "$root/SteamHours.exe" -PassThru -WindowStyle Hidden
             if (-not $first.WaitForExit(120000)) { $first.Kill(); throw 'First launch timed out.' }
             if ($first.ExitCode -ne 0 -or -not (Test-Path $installed)) { throw 'Background preparation failed.' }
             Start-Sleep -Seconds 5
-            $running = @(Get-Process -Name 'Steam Saat' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installed })
+            $running = @(Get-Process -Name 'Steam Hours' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installed })
             if ($running.Count -eq 0) { throw 'Installed application did not remain open.' }
             $stamp = (Get-Item $installed).LastWriteTimeUtc
-            $second = Start-Process -FilePath "$root/SteamSaat.exe" -PassThru -WindowStyle Hidden
+            $second = Start-Process -FilePath "$root/SteamHours.exe" -PassThru -WindowStyle Hidden
             if (-not $second.WaitForExit(20000)) { $second.Kill(); throw 'Second launch timed out.' }
             if ($second.ExitCode -ne 0) { throw 'Second launch failed.' }
             if ((Get-Item $installed).LastWriteTimeUtc -ne $stamp) { throw 'Second launch must not reinstall.' }
             Write-Output 'First-launch preparation and subsequent direct launch passed. No Steam account used.'
           } finally {
             # Fresh disposable CI runner, no account. Stop only this installed executable.
-            Get-Process -Name 'Steam Saat' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installed } | Stop-Process -Force
+            Get-Process -Name 'Steam Hours' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $installed } | Stop-Process -Force
           }

@@ -14,4 +14,4 @@ function walk(dir) {
   }
 }
 ['src', 'test', 'scripts'].forEach(walk);
-process.stdout.write(`${count} JavaScript dosyası sözdizimi kontrolünden geçti.\n`);
+process.stdout.write(`${count} JavaScript files passed syntax checks.\n`);

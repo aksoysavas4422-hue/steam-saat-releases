@@ -2,9 +2,11 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { appId, initialFavorites } = require('./catalog.cjs');
-function defaults() { return { closeToTray: true, autoReconnect: true, autoStartOnLogin: true, selectedGames: [], favorites: initialFavorites(), fiveMPath: null }; }
+const { languages } = require('./ui/i18n.js');
+function defaults() { return { language: 'en', closeToTray: true, autoReconnect: true, autoStartOnLogin: true, selectedGames: [], favorites: initialFavorites(), fiveMPath: null }; }
 function clean(value) {
   const result = defaults();
+  if (languages.includes(value?.language)) result.language = value.language;
   for (const key of ['closeToTray', 'autoReconnect', 'autoStartOnLogin']) if (typeof value?.[key] === 'boolean') result[key] = value[key];
   if (Array.isArray(value?.favorites)) for (const game of value.favorites.slice(0, 50)) {
     if (result.favorites.length < 50 && appId(game?.id) && typeof game.name === 'string' && game.name.trim() && !result.favorites.some(item => item.id === game.id)) result.favorites.push({ id: game.id, name: game.name.slice(0, 160) });
