@@ -1,4 +1,7 @@
-# Steam Saat 0.4.1
+# Steam Saat 0.5.0
+
+Windows kurulum ve otomatik güncelleme talimatları: [INSTALLATION.md](INSTALLATION.md).
+Kurulum paketi: https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest
 
 Türkçe, koyu temalı Windows masaüstü uygulaması. Ana ekranda Squad, Counter-Strike 2 ve FiveM bulunur. Bu proje ASF kodunu kopyalamaz; Steam bağlantısı için `steam-user` kullanır.
 
@@ -10,12 +13,12 @@ Türkçe, koyu temalı Windows masaüstü uygulaması. Ana ekranda Squad, Counte
 - Sistem tepsisi, artan aralıklarla otomatik yeniden bağlantı ve isteğe bağlı Windows başlangıcı vardır. Windows başlangıcında seçili oyunları otomatik başlatma eklendi. Oyun seçimleri ve FiveM yolu hatırlanır.
 - Arayüz sade masaüstü düzenine geçirildi: üst sekmeler, düz yüzeyler, kompakt oyun seçimleri ve tablolar. Giriş başarılı olduğunda kullanıcı adı/şifre formu gizlenir.
 - Windows başlangıcında özel adla oluşturulmuş kaydın yanlışlıkla kapalı okunması düzeltildi. Uygulama yalnızca kendi başlangıç girdisini doğrular; aynı Electron EXE'sini kullanan başka projeleri açık kabul etmez. Başlangıç ayarı yerel tercih dosyasına yazma başarısına bağlı değildir. Engellenmiş veya yazılamayan kayıtlarda açıklayıcı hata gösterilir.
-- Node.js üzerinde 46 otomatik test ve 16 JavaScript dosyasının sözdizimi kontrolü başarılı. Testler Windows şifreleme API'sini, Electron'u ve Steam'i taklit eder; gerçek Steam hesabıyla uçtan uca doğrulama değildir.
-- Bağımlılıklar artık yerelde kurulu ve `package-lock.json` mevcut. Electron uygulama modu bu otomasyon ortamında `0x80000003` ile açılmadığından gerçek DPAPI ve pencere testi tamamlanamadı. Hazır tek dosya EXE paketi oluşturulmadı.
+- GitHub Windows ortamında 49 otomatik test ve 18 JavaScript dosyasının sözdizimi kontrolü geçti. Testler Steam ve Electron API'lerini taklit eder; gerçek Steam hesabıyla uçtan uca doğrulama değildir. Yerel dosya erişim koruması bir şifreli kayıt testini engelledi.
+- NSIS Windows kurulum ve GitHub Releases otomatik güncelleme iş akışı eklendi. Electron uygulama modu bu otomasyon ortamında `0x80000003` ile açılmadığından gerçek pencere ve güncelleme geçişi testi tamamlanamadı.
 - Doğrudan sürümler ve geçişli bağımlılıklar kilit dosyasında sabitlenmiştir. Bağımlılıkların tamamı kaynak düzeyinde denetlenmiş değildir.
 - Hiçbir gerçek Steam hesabına giriş yapılmadı.
 
-## Kurulum ve çalıştırma
+## Kaynak kodundan çalıştırma (geliştirme)
 
 1. [Node.js](https://nodejs.org/en/download) 22 veya üstünü **npm dahil** kur. Node.js tek başına yeterli değildir. Standart Windows yükleyicisi npm içerir.
 2. Bu klasörde `KUR.cmd` dosyasını aç. İlk kurulum internet gerektirir. Paketler npm'den, Electron çalışma zamanı Electron dağıtım sunucularından indirilir. Bu indirme adresleri oyun oturumunun veri alıcıları değildir.

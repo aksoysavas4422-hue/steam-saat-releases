@@ -2,7 +2,7 @@ name: Windows installer
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'package*.json', 'scripts/**', 'test/**', '.github/workflows/release.yml']
+    paths: ['src/**', 'package*.json', 'scripts/**', 'test/**']
   workflow_dispatch:
 permissions:
   contents: write
@@ -22,8 +22,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.11.0'
-      - name: Resolve pinned packaging dependencies
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install from resolved lock
         run: npm ci --no-audit --no-fund
       - name: Check and test
@@ -44,10 +42,11 @@ jobs:
           $repo = '${{ github.repository }}'
           gh release view $tag --repo $repo *> $null
           if ($LASTEXITCODE -eq 0) { throw 'This version is already published. Increase package.json version.' }
-          $assets = @(Get-ChildItem dist -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object FullName)
+          $assets = @((Resolve-Path "dist/SteamSaat-$version-Setup.exe").Path, (Resolve-Path "dist/SteamSaat-$version-Setup.exe.blockmap").Path, (Resolve-Path dist/latest.yml).Path)
           $hash = (Get-FileHash "dist/SteamSaat-$version-Setup.exe" -Algorithm SHA256).Hash.ToLower()
           "$hash  SteamSaat-$version-Setup.exe" | Set-Content dist/SHA256SUMS.txt -Encoding utf8
           $assets += (Resolve-Path dist/SHA256SUMS.txt).Path
           $assets += (Resolve-Path package-lock.json).Path
           gh release create $tag @assets --repo $repo --target '${{ github.sha }}' --title "Steam Saat $version" --notes 'Windows x64. Bir kez kur; sonraki sürümler uygulama içinden otomatik indirilir. Kurulum yayıncı sertifikasıyla imzalanmamıştır.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
+

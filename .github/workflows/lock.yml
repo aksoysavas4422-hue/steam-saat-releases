@@ -1,0 +1,32 @@
+name: Pin packaging dependencies
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/lock.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  lock:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.11.0'
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit resolved lock without publishing another release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $repo = '${{ github.repository }}'
+          $old = gh api "repos/$repo/contents/package-lock.json?ref=main" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read current lock.' }
+          $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes('package-lock.json'))
+          @{ message = 'Pin resolved Windows packaging dependencies [skip ci]'; content = $content; sha = $old.sha; branch = 'main' } | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/lock-body.json" -Encoding utf8
+          gh api --method PUT "repos/$repo/contents/package-lock.json" --input "$env:RUNNER_TEMP/lock-body.json" --silent
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot persist lock.' }
