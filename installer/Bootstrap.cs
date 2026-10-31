@@ -36,7 +36,7 @@ internal static class Bootstrap {
           if (!File.Exists(exe)) throw new FileNotFoundException();
           var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = root };
           start.EnvironmentVariables.Remove("ELECTRON_RUN_AS_NODE");
-          Process.Start(start);
+          using (Process launched = Process.Start(start)) { }
           return 0;
         } finally { mutex.ReleaseMutex(); }
       }
