@@ -28,11 +28,19 @@ function setup() {
 }
 function online(t) { const value = setup(); t.after(() => value.session.disconnect()); value.client.emit('loggedOn'); return value; }
 
-test('only Squad and CS2 are accepted; FiveM and GTA V cannot be substituted', () => {
+test('explicit Steam game IDs are allowed, invalid IDs and duplicates are rejected', () => {
   assert.deepEqual(validateGames([393380, 730]), [393380, 730]);
-  for (const ids of [[], [271590], [3240220], ['730'], [730, 730], null, [730, 393380, 1]]) {
+  assert.deepEqual(validateGames([440]), [440]);
+  for (const ids of [[], [0], [-1], ['730'], [730, 730], null, Array.from({ length: 33 }, (_, i) => i + 1)]) {
     assert.throws(() => validateGames(ids));
   }
+});
+test('custom Steam game is reported explicitly and its actual time is queried', async t => {
+  const f = online(t); f.client.totals[440] = 123;
+  await f.session.start([440]);
+  assert.deepEqual(f.session.snapshot().games, [440]);
+  assert.equal(f.session.snapshot().playtime.totals[440], 123);
+  assert.ok(f.client.calls.some(call => call[0] === 'games' && call[1][0] === 440 && call[2] === false));
 });
 test('disk storage and auto reconnect are disabled; login has unique nonzero ID', t => {
   const f = setup(); t.after(() => f.session.disconnect());

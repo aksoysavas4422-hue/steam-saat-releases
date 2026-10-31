@@ -2,7 +2,7 @@ name: Windows installer
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'package*.json', 'scripts/**', 'test/**']
+    paths: ['src/**', 'package*.json', 'scripts/**', 'test/**', 'installer/**']
   workflow_dispatch:
 permissions:
   contents: write
@@ -32,6 +32,14 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run dist
+      - name: Verify public Steam game search
+        run: node scripts/catalog-smoke.cjs
+      - name: Build single application entry point
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          & "$env:WINDIR/Microsoft.NET/Framework64/v4.0.30319/csc.exe" /nologo /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /win32manifest:installer/app.manifest /win32icon:installer/app.ico "/resource:dist/SteamSaat-$version-Setup.exe,setup" /out:dist/SteamSaat.exe installer/Bootstrap.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Application launcher compilation failed.' }
       - name: Publish tested build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,11 +50,11 @@ jobs:
           $repo = '${{ github.repository }}'
           gh release view $tag --repo $repo *> $null
           if ($LASTEXITCODE -eq 0) { throw 'This version is already published. Increase package.json version.' }
-          $assets = @((Resolve-Path "dist/SteamSaat-$version-Setup.exe").Path, (Resolve-Path "dist/SteamSaat-$version-Setup.exe.blockmap").Path, (Resolve-Path dist/latest.yml).Path)
+          $assets = @((Resolve-Path dist/SteamSaat.exe).Path, (Resolve-Path "dist/SteamSaat-$version-Setup.exe").Path, (Resolve-Path "dist/SteamSaat-$version-Setup.exe.blockmap").Path, (Resolve-Path dist/latest.yml).Path)
           $hash = (Get-FileHash "dist/SteamSaat-$version-Setup.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  SteamSaat-$version-Setup.exe" | Set-Content dist/SHA256SUMS.txt -Encoding utf8
+          $entryHash = (Get-FileHash dist/SteamSaat.exe -Algorithm SHA256).Hash.ToLower()
+          @("$hash  SteamSaat-$version-Setup.exe", "$entryHash  SteamSaat.exe") | Set-Content dist/SHA256SUMS.txt -Encoding utf8
           $assets += (Resolve-Path dist/SHA256SUMS.txt).Path
           $assets += (Resolve-Path package-lock.json).Path
-          gh release create $tag @assets --repo $repo --target '${{ github.sha }}' --title "Steam Saat $version" --notes 'Windows x64. Bir kez kur; sonraki sürümler uygulama içinden otomatik indirilir. Kurulum yayıncı sertifikasıyla imzalanmamıştır.'
+          gh release create $tag @assets --repo $repo --target '${{ github.sha }}' --title "Steam Saat $version" --notes 'SteamSaat.exe dosyasını aç. İlk açılışta arka planda hazırlanır ve uygulama açılır; terminal veya kurulum sihirbazı yoktur. Windows x64. Steam araması ve kalıcı favoriler. Yayıncı sertifikası yoktur.'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
-

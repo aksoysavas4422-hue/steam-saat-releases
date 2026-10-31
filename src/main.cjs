@@ -11,6 +11,8 @@ const { Reconnect } = require('./reconnect.cjs');
 const { Preferences, defaults } = require('./preferences.cjs');
 const { makeTray, startupEnabled, setStartup, StartupError } = require('./desktop.cjs');
 const { setupUpdates } = require('./updates.cjs');
+const { Catalog, appId } = require('./catalog.cjs');
+const catalog = new Catalog();
 app.setPath('userData', path.join(app.getPath('appData'), 'steam-saat'));
 let updates, updateInterval, updateDelay;
 
@@ -46,6 +48,7 @@ async function connectAgain(recovery = true) {
 }
 async function startGames(ids) {
   const games = validateGames(ids);
+  if (games.some(id => !options.favorites.some(game => game.id === id))) throw new Error('Önce oyunu favorilere ekle.');
   cancelContinuation(); manualDisconnected = false; desiredGames = games;
   const result = await call('start', games);
   if (!result.ok) desiredGames = [];
@@ -257,7 +260,7 @@ handle('preferences', async patch => {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Geçersiz ayar.');
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'selectedGames') {
-      if (!Array.isArray(value) || value.length > 2 || value.some(id => ![393380, 730].includes(id))) throw new Error('Geçersiz oyun.');
+      if (!Array.isArray(value) || value.length > 32 || value.some(id => !appId(id) || !options.favorites.some(game => game.id === id)) || new Set(value).size !== value.length) throw new Error('Geçersiz oyun.');
     } else if (!['closeToTray', 'autoReconnect', 'autoStartOnLogin', 'startAtLogin'].includes(key) || typeof value !== 'boolean') throw new Error('Geçersiz ayar.');
   }
   if (patch.startAtLogin !== undefined) {
@@ -287,6 +290,30 @@ handle('hide', () => {
 });
 handle('quit', () => { app.quit(); return { ok: true }; });
 handle('check-updates', async () => { await updates?.check(); return { ok: true }; });
+handle('search-games', async term => {
+  try { return { ok: true, games: await catalog.search(term) }; }
+  catch { return { ok: false, message: 'Steam araması alınamadı. En az 2 harf yazıp biraz sonra yeniden dene.' }; }
+});
+handle('add-favorite', async id => {
+  if (cached.status === 'running') return { ok: false, message: 'Favorileri değiştirmeden önce işlemi durdur.' };
+  if (options.favorites.some(game => game.id === id)) return { ok: true };
+  if (options.favorites.length >= 50) return { ok: false, message: 'En fazla 50 favori ekleyebilirsin.' };
+  let game;
+  try { game = await catalog.game(id); }
+  catch { return { ok: false, message: 'Bu öğe oyun olarak doğrulanamadı. DLC ve paketler eklenmez.' }; }
+  // Recheck after network IO: the user may have started another action.
+  if (cached.status === 'running') return { ok: false, message: 'Önce işlemi durdur.' };
+  if (options.favorites.length >= 50) return { ok: false, message: 'En fazla 50 favori ekleyebilirsin.' };
+  if (!options.favorites.some(item => item.id === id)) options.favorites.push(game);
+  await preferences.save(options); publishAuth(); return { ok: true };
+});
+handle('remove-favorite', async id => {
+  if (!appId(id) || [393380, 730].includes(id) || cached.status === 'running') return { ok: false, message: 'Bu favori şu anda kaldırılamaz.' };
+  options.favorites = options.favorites.filter(game => game.id !== id);
+  options.selectedGames = options.selectedGames.filter(value => value !== id);
+  desiredGames = desiredGames.filter(value => value !== id);
+  await preferences.save(options); publishAuth(); return { ok: true };
+});
 handle('playtime', () => call('playtime'));
 handle('forget', async () => {
   manualDisconnected = true; volatileToken = null; desiredGames = []; cancelContinuation(); reconnect.cancel();

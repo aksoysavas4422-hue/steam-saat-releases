@@ -1,6 +1,7 @@
 'use strict';
 const { EventEmitter } = require('node:events');
 const { randomInt } = require('node:crypto');
+const { appId } = require('./catalog.cjs');
 
 const APP_IDS = Object.freeze([393380, 730]);
 function validateLogin(value) {
@@ -12,9 +13,9 @@ function validateLogin(value) {
   return { accountName: value.accountName.trim(), password: value.password };
 }
 function validateGames(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 2
-      || value.some(id => !APP_IDS.includes(id)) || new Set(value).size !== value.length) {
-    throw new Error('Squad veya CS2 seç.');
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32
+      || value.some(id => !appId(id)) || new Set(value).size !== value.length) {
+    throw new Error('En fazla 32 Steam oyunu seç.');
   }
   return [...value];
 }
@@ -30,6 +31,7 @@ class Session extends EventEmitter {
     this.status = 'offline';
     this.message = 'Bağlı değil.';
     this.games = [];
+    this.watchedGames = [...APP_IDS];
     this.startedAt = null;
     this.elapsed = 0;
     this.blocked = false;
@@ -152,17 +154,17 @@ class Session extends EventEmitter {
           const done = (error, response) => { clearTimeout(timer); error ? reject(new Error('Süre okunamadı.')) : resolve(response); };
           try {
             if (!client.steamID || typeof client.getUserOwnedApps !== 'function') return done(new Error('Süre okunamadı.'));
-            client.getUserOwnedApps(client.steamID, { filterAppids: APP_IDS, includePlayedFreeGames: true, includeFreeSub: true, includeAppInfo: false }, done);
+            client.getUserOwnedApps(client.steamID, { filterAppids: this.watchedGames, includePlayedFreeGames: true, includeFreeSub: true, includeAppInfo: false }, done);
           } catch { done(new Error('Süre okunamadı.')); }
         });
         if (this.client !== client || !['online', 'running'].includes(this.status)) return false;
         if (!Array.isArray(result?.apps)) throw new Error('Süre okunamadı.');
         const totals = {};
-        for (const id of APP_IDS) {
+        for (const id of this.watchedGames) {
           const minutes = result.apps.find(game => game.appid === id)?.playtime_forever;
           totals[id] = Number.isSafeInteger(minutes) && minutes >= 0 ? minutes : null;
         }
-        if (!APP_IDS.some(id => totals[id] !== null)) throw new Error('Süre okunamadı.');
+        if (!this.watchedGames.some(id => totals[id] !== null)) throw new Error('Süre okunamadı.');
         this.playtime.totals = totals;
         this.playtime.checkedAt = this.wallClock();
         this.playtime.status = 'ready';
@@ -191,7 +193,7 @@ class Session extends EventEmitter {
     this.calculateDelta(); this.publish();
   }
   calculateDelta() {
-    for (const id of APP_IDS) {
+    for (const id of this.watchedGames) {
       const total = this.playtime.totals[id], start = this.playtime.baseline[id];
       this.playtime.delta[id] = Number.isSafeInteger(total) && Number.isSafeInteger(start) && total >= start ? total - start : null;
     }
@@ -212,6 +214,8 @@ class Session extends EventEmitter {
     if (this.status !== 'online' || !this.client) throw new Error('Önce Steam hesabına bağlan.');
     if (this.blocked || this.client.playingState?.blocked) throw new Error('Hesap başka yerde oyun oynuyor.');
     const client = this.client;
+    if (this.readingPlaytime?.client === client) await this.readingPlaytime.promise;
+    this.watchedGames = [...new Set([...APP_IDS, ...games])];
     await this.refreshPlaytime({ baseline: true });
     if (this.client !== client || this.status !== 'online' || this.blocked || client.playingState?.blocked) throw new Error('Bağlantı veya oyun durumu değişti.');
     // Never use force=true or kickPlayingSession().

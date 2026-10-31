@@ -1,44 +1,56 @@
-# Windows uygulaması
+# Steam Saat 0.6.0
 
-Releases: https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest
+İndir: https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest/download/SteamSaat.exe
 
-Eski uygulamadan tamamen çık. SteamSaat-0.5.0-Setup.exe dosyasını indirip kur.
-Masaüstündeki veya Başlat menüsündeki Steam Saat kısayolunu aç. Node.js, .NET SDK,
-KUR.cmd veya BASLAT.cmd gerekmez. Windows x64 kullanılır. Steam hesabına kendin giriş yap.
-Kaynak sürümle aynı Windows hesabındaki kayıtlı oturum/ayarlar korunur.
-Yeni kurulumda Windows ile başlat ayarını tekrar açmak gerekebilir.
+SteamSaat.exe dosyasını aç. İlk açılışta gereken dosyalar kullanıcı hesabının
+LocalAppData/Programs/SteamSaat klasörüne arka planda yerleştirilir, ardından uygulama
+açılır. Terminal, kurulum sihirbazı, KUR/BASLAT dosyası veya yönetici izni gerekmez.
+İlk açılış dosya boyutu nedeniyle biraz sürebilir. İkinci açılışta mevcut uygulama
+doğrudan açılır. Masaüstü/Başlat kısayolu oluşturulur. Windows x64 ve Windows'ta bulunan
+.NET Framework 4 çalışma zamanı kullanılır; Node.js ve .NET SDK kurulmaz.
 
-Uygulama 15 saniye sonra ve saatte bir GitHub Releases güncellemelerini kontrol eder.
-İndirme arka plandadır. İndirme tamamlandıktan sonra Uygulamadan çık seçeneği
-bağlantıyı kapatır ve kurulumu uygular. Pencerenin çarpısı tepsiye gizliyorsa güncelleme
-kurulmaz. Windows kapanırken güncelleme kurulumu başlatılmaz.
+Steam hesabına uygulama içinden kendin giriş yap. Arama alanında Steam mağazasından
+oyun bulabilir, + Favori ile ekleyebilir ve seçerek başlatabilirsin. En fazla 50 favori
+ve aynı anda 32 seçili oyun desteklenir. Steam mağazasında oyun türü doğrulanır;
+DLC/paket eklenmez. Oyun eklemek lisans satın almaz veya hesabına oyun kazandırmaz.
+Squad ve CS2 hazır favorilerdir. FiveM yalnızca yerel FiveM.exe kısayoludur;
+Steam AppID'si atanmaz veya yerine GTA V seçilmez.
 
-## Güvenlik sınırları
+Favoriler ve seçimler kalıcıdır. Eklenen oyunların Steam süresi, seçilip başlatıldıktan
+sonra sorgulanır. Alınamayan süre uydurulmaz. Yerel sayaç Steam toplamı değildir.
 
-Steam kimlik bilgileri güncelleme servisine aktarılmaz. Güncelleme erişimi GitHub'a
-uygulama sürümü ve normal HTTP istek metaverileri gösterir. Reklam/telemetri yoktur.
+Güncellemeler açılıştan 15 saniye sonra ve saatte bir kontrol edilip arka planda
+indirilir. Hazır olduğunda Uygulamadan çık seçeneği bağlantıyı kapatıp güncellemeyi
+sessizce uygular. Pencere çarpısı tepsiye gizliyorsa kurulum başlamaz. Windows
+kapanırken güncelleme kurulumu başlatılmaz. Bilgisayar kapalıyken saat birikmez.
+
+## Güvenlik sınırları ve doğrulama
+
 Şifre ve Guard kodu diske yazılmaz. İsteğe bağlı hatırlanan oturum Windows DPAPI ile
-şifrelenir. Bu, aynı Windows hesabında çalışan zararlı yazılıma karşı koruma sağlamaz.
+şifrelenir. Aynı Windows hesabında çalışan zararlı yazılıma karşı garanti değildir.
+Steam araması doğrudan Steam mağazasına, güncelleme kontrolü GitHub'a gider.
+Hesap bilgileri bu sorgulara eklenmez. Arama adı ve IP gibi normal HTTP metaverileri
+ilgili sunucuya görünür. Arama, Steam'in belgelenmiş kararlı Web API sözleşmesi
+olmayan mağaza uçlarını kullanır; mağaza değişirse arama güncellemesi gerekebilir.
 
-NSIS paketinde yayıncı sertifikası yoktur; Windows tanınmayan yayıncı gösterebilir.
-electron-updater GitHub HTTPS ve sürüm metadatasındaki SHA-512 bütünlük kontrolünü
-kullanır. Bağımsız bir yayıncı imzası doğrulanmaz; GitHub hesabı/depo yazma yetkisi
-ele geçirilirse kötü amaçlı güncelleme yayımlanabilir. GitHub hesabında iki faktörlü
-doğrulama kullan. Güvenlik yazılımlarını kapatma.
+NSIS ve tek EXE giriş noktası yayıncı sertifikasıyla imzalanmış değildir. Windows
+tanınmayan yayıncı uyarısı gösterebilir; uygulama bu işletim sistemi uyarılarını
+gizleyemez. Güvenlik yazılımlarını kapatma. Güncelleme güveni GitHub HTTPS ve
+electron-updater SHA-512 dosya bütünlüğü kontrolüne dayanır. Bağımsız yayıncı imzası
+doğrulanmaz; GitHub yazma yetkisinin ele geçirilmesi kötü amaçlı güncelleme riski
+oluşturur. GitHub hesabında iki faktörlü doğrulama kullan.
 
-Üst bağımlılıklar tam sürüme sabittir: Electron 45.1.0, steam-user 5.3.0,
-electron-updater 6.8.12, electron-builder 26.18.1. Yeni paketlerin kilit dosyası bu
-ortamda ağ engeli nedeniyle çözülemiyor. İlk CI çalışması mevcut kilidi genişletir,
-ardından npm ci kullanır ve çözülen package-lock.json dosyasını sürüme ekler.
-Bu ilk çözümün geçişli bağımlılıkları henüz sabitlenmiş sayılmaz; sonraki geliştirmede
-yayımlanan kilit dosyası kaynak depoya alınmalıdır. Üçüncü taraf kodu da uygulamanın
-işlem yetkileriyle çalışır; tüm bağımlılıkların güvenlik denetimi yapılmış değildir.
+Electron 45.1.0, steam-user 5.3.0, electron-updater 6.8.12 ve electron-builder 26.18.1
+tam sürüme sabittir; geçişli bağımlılıklar package-lock.json içinde çözülüp kilitlenmiştir.
+Derleme npm ci kullanır. Üçüncü tarafların tamamına kaynak güvenlik denetimi yapılmadı.
+Onlar da uygulama yetkileriyle çalışır. Takas, envanter, reklam veya telemetri yoktur.
+Başka Steam oyun oturumunu düşürmez. Steam otomasyonu hesap kısıtlaması riski taşır.
 
-Steam saat otomasyonu hesap kısıtlaması riski taşır. Bilgisayar kapalıyken çalışmaz.
+GitHub Actions kaynak kontrolü, otomatik testler, canlı genel mağaza araması ve
+Windows paketlemesi yapar. Gerçek Steam hesabı kullanılmaz. Yerel otomasyon ortamında
+Electron arayüzü açılmadığından gerçek pencere ve güncelleme geçişi testi yapılamadı.
 
-## Derleme
-
-GitHub Actions Windows üzerinde kontrol/test sonrasında NSIS üretir ve sürümü yayımlar.
-Aynı sürümün üzerine yazılmaz. Sonraki sürümlerde package.json sürümünü artır.
-Yerelde ağ erişimi olan Node 22+ ortamında: npm install, npm run check, npm test,
-npm run dist. Gerçek hesap girişi testlerin parçası değildir.
+Geliştirme için ağ erişimli Node 22+ ortamında npm ci, npm run check, npm test,
+npm run dist kullanılır. GitHub Actions NSIS'i ve tek SteamSaat.exe giriş noktasını
+birlikte üretip sürüme ekler. Sonraki sürümlerde package.json ve kilit dosyasının
+kök sürümünü artırıp main dalına gönder. Aynı yayımlanmış sürümün üzerine yazılmaz.

@@ -10,7 +10,7 @@ function fixture(connected = true) {
   for (const match of html.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)) {
     elements.set(match[1], { value: /\bvalue="([^"]+)"/.exec(match[0])?.[1] || '', checked: /\bchecked\b/.test(match[0]),
       textContent: '', disabled: false, classList: { toggle() {} }, handlers: {},
-      addEventListener(type, fn) { this.handlers[type] = fn; }, focus() {}, scrollIntoView() {} });
+      addEventListener(type, fn) { this.handlers[type] = fn; }, children: [], append(...children) { this.children.push(...children); }, focus() {}, scrollIntoView() {} });
   }
   let update; const calls = [];
   const api = { onState: fn => { update = fn; }, snapshot: async () => ({ ok: true }),
@@ -18,7 +18,9 @@ function fixture(connected = true) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/ui/renderer.js'), 'utf8'), {
     window: connected ? { steamSaat: api } : {}, document: { getElementById: id => {
       assert.ok(elements.has(id), 'renderer references missing control: ' + id); return elements.get(id);
-    }, querySelectorAll: () => [] }, performance, setInterval: () => 1, Date
+    }, querySelectorAll: () => [], createElement: tag => ({ tagName: tag, children: [], attributes: {}, handlers: {},
+      setAttribute(key, value) { this.attributes[key] = value; }, append(...children) { this.children.push(...children); },
+      addEventListener(name, fn) { this.handlers[name] = fn; } }) }, performance, setInterval: () => 1, setTimeout, clearTimeout, Date
   });
   return { get: id => elements.get(id), update, calls, html };
 }
@@ -32,6 +34,16 @@ test('new dashboard renders unknown Steam time without making up progress', () =
   assert.equal(f.get('login-form').hidden, true);
   assert.equal(f.get('account-ready').hidden, false);
   assert.equal((f.html.match(/class="game /g) || []).length, 3);
+});
+test('custom favorite names stay text and selected Steam time is shown', () => {
+  const f = fixture();
+  f.update({ status: 'online', elapsedMs: 0, desktop: { favorites: [{ id: 440, name: '<script>bad()</script>' }], selectedGames: [440] },
+    playtime: { checkedAt: Date.now(), totals: { 440: 120 }, delta: { 440: 5 } } });
+  const row = f.get('extra-favorites').children[0];
+  assert.equal(row.children[0].children[1].textContent, '<script>bad()</script>');
+  assert.equal(row.children[0].children[0].checked, true);
+  assert.equal(row.children[1].textContent, '2 sa 0 dk · +5 dk');
+  assert.equal(f.get('selected-count').textContent, '1 oyun seçili');
 });
 test('retry countdown and unavailable startup integration are clearly represented', () => {
   const f = fixture();

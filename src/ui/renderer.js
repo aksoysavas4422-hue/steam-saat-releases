@@ -5,12 +5,38 @@ let state = { status: 'offline', games: [], elapsedMs: 0, guardAfter: 0, blocked
 let receivedAt = performance.now();
 let busy = false;
 let hasFiveM = false;
+const favoriteControls = new Map();
+let favoriteKey = '', searchSerial = 0, searchTimer;
 const labels = { restoring: 'Oturum açılıyor', offline: 'Bağlı değil', connecting: 'Bağlanıyor', guard: 'Steam Guard', online: 'Bağlı', running: 'Etkin oturum' };
-const chosen = () => ['squad', 'cs2'].filter(id => $(id).checked).map(id => Number($(id).value));
+const chosen = () => [...['squad', 'cs2'].filter(id => $(id).checked).map(id => Number($(id).value)), ...[...favoriteControls].filter(([_id, control]) => control.input.checked).map(([id]) => id)];
+function renderFavorites(favorites) {
+  const extra = (favorites || []).filter(game => ![393380, 730].includes(game.id));
+  const key = JSON.stringify(extra); if (key === favoriteKey) return;
+  favoriteKey = key; favoriteControls.clear(); $('extra-favorites').textContent = '';
+  for (const game of extra) {
+    const row = document.createElement('div'); row.className = 'favorite-row';
+    const label = document.createElement('label'), input = document.createElement('input'); input.type = 'checkbox';
+    input.setAttribute('aria-label', game.name + ' seç');
+    const name = document.createElement('span'); name.textContent = game.name;
+    const time = document.createElement('span'); time.className = 'help';
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = 'Kaldır';
+    label.append(input, name); row.append(label, time, remove); $('extra-favorites').append(row);
+    input.addEventListener('change', () => { paint(); if (api) act(() => savePreferences({ selectedGames: chosen() })); });
+    remove.addEventListener('click', () => act(() => api.removeFavorite(game.id)));
+    favoriteControls.set(game.id, { input, time, remove });
+  }
+}
 function message(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); }
 function paint() {
   const connected = ['online', 'running'].includes(state.status);
   const desktop = state.desktop || {};
+  $('game-search').disabled = !api;
+  $('search-games').disabled = !api || busy;
+  for (const [id, control] of favoriteControls) {
+    control.input.disabled = busy || state.status === 'running'; control.remove.disabled = !api || busy || state.status === 'running';
+    const total = state.playtime?.totals?.[id], delta = state.playtime?.delta?.[id];
+    control.time.textContent = Number.isSafeInteger(total) ? Math.floor(total / 60) + ' sa ' + total % 60 + ' dk' + (Number.isSafeInteger(delta) ? ' · +' + delta + ' dk' : '') : 'Steam süresi: —';
+  }
   const waiting = Boolean(state.retry?.nextAt);
   $('retry-note').textContent = waiting ? `${state.retry.count}/8 · ${Math.max(0, Math.ceil((state.retry.nextAt - Date.now()) / 1000))} sn sonra tekrar denenecek`
     : state.retry?.exhausted ? 'Otomatik deneme sınırına ulaşıldı'
@@ -75,10 +101,12 @@ function update(value) {
   state = value;
   if (typeof value.remember === 'boolean') $('remember').checked = value.remember;
   if (value.desktop) {
+    renderFavorites(value.desktop.favorites);
     hasFiveM = Boolean(value.desktop.fiveMReady);
     for (const [id, key] of [['close-to-tray', 'closeToTray'], ['auto-reconnect', 'autoReconnect'], ['start-at-login', 'startAtLogin'], ['auto-start-on-login', 'autoStartOnLogin']]) $(id).checked = Boolean(value.desktop[key]);
     if (Array.isArray(value.desktop.selectedGames)) {
       for (const id of ['squad', 'cs2']) $(id).checked = value.desktop.selectedGames.includes(Number($(id).value));
+      for (const [id, control] of favoriteControls) control.input.checked = value.desktop.selectedGames.includes(id);
     }
   }
   receivedAt = performance.now();
@@ -129,6 +157,33 @@ for (const [id, key] of [['close-to-tray', 'closeToTray'], ['auto-reconnect', 'a
 $('hide').addEventListener('click', () => act(() => api.hide()));
 $('quit').addEventListener('click', () => act(() => api.quit()));
 $('check-updates').addEventListener('click', () => act(() => api.checkUpdates()));
+async function searchGames() {
+  if (!api) return;
+  const term = $('game-search').value.trim(), serial = ++searchSerial;
+  $('search-results').textContent = '';
+  if (term.length < 2) { $('search-note').textContent = 'Aramak için en az 2 harf yaz.'; return; }
+  $('search-note').textContent = 'Steam mağazasında aranıyor…';
+  try {
+    const result = await api.searchGames(term); if (serial !== searchSerial) return;
+    if (!result.ok) { $('search-note').textContent = result.message; return; }
+    $('search-note').textContent = result.games.length ? 'Favorilerine eklemek istediğin oyunu seç.' : 'Oyun bulunamadı. Farklı bir ad dene.';
+    for (const game of result.games) {
+      const row = document.createElement('div'); row.className = 'search-result';
+      const label = document.createElement('span'); label.textContent = game.name;
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'small secondary';
+      const exists = state.desktop?.favorites?.some(item => item.id === game.id);
+      button.textContent = exists ? 'Favorilerde' : '+ Favori'; button.disabled = exists || state.status === 'running';
+      button.addEventListener('click', () => act(async () => {
+        const response = await api.addFavorite(game.id);
+        if (response.ok) { button.textContent = 'Favorilerde'; button.disabled = true; $('search-note').textContent = 'Oyun favorilere eklendi. İşlem için oyunu seç.'; }
+        return response;
+      }));
+      row.append(label, button); $('search-results').append(row);
+    }
+  } catch { if (serial === searchSerial) $('search-note').textContent = 'Arama tamamlanamadı. Yeniden dene.'; }
+}
+$('game-search-form').addEventListener('submit', event => { event.preventDefault(); clearTimeout(searchTimer); void searchGames(); });
+$('game-search').addEventListener('input', () => { ++searchSerial; clearTimeout(searchTimer); searchTimer = setTimeout(() => { void searchGames(); }, 850); });
 $('retry-now').addEventListener('click', () => act(() => api.retryNow()));
 document.querySelectorAll('[data-scroll]').forEach(button => button.addEventListener('click', () => {
   $(button.dataset.scroll).scrollIntoView({ behavior: 'smooth' });

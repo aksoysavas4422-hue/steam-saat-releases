@@ -1,7 +1,7 @@
-# Steam Saat 0.5.0
+# Steam Saat 0.6.0
 
-Windows kurulum ve otomatik güncelleme talimatları: [INSTALLATION.md](INSTALLATION.md).
-Kurulum paketi: https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest
+SteamSaat.exe dosyasını açınca arka planda hazırlanıp uygulama açılır; terminal ve kurulum sihirbazı yoktur. Steam oyun araması, kalıcı favoriler ve otomatik güncelleme vardır. Kullanım ve güvenlik sınırları: [INSTALLATION.md](INSTALLATION.md).
+Uygulama: https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest/download/SteamSaat.exe
 
 Türkçe, koyu temalı Windows masaüstü uygulaması. Ana ekranda Squad, Counter-Strike 2 ve FiveM bulunur. Bu proje ASF kodunu kopyalamaz; Steam bağlantısı için `steam-user` kullanır.
 
