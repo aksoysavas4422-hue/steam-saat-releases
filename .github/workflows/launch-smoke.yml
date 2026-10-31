@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           $root = "$env:RUNNER_TEMP/steam-saat-launch"
-          $installed = "$env:LOCALAPPDATA/Programs/SteamSaat/Steam Saat.exe"
+          $installed = [IO.Path]::GetFullPath("$env:LOCALAPPDATA/Programs/SteamSaat/Steam Saat.exe")
           if (Test-Path "$env:APPDATA/steam-saat/remembered-session.bin") { throw 'CI must not contain a Steam account.' }
           try {
             $first = Start-Process -FilePath "$root/SteamSaat.exe" -PassThru -WindowStyle Hidden
