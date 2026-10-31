@@ -1,0 +1,29 @@
+{
+  "name": "steam-saat",
+  "version": "0.5.0",
+  "author": "Steam Saat",
+  "repository": "https://github.com/aksoysavas4422-hue/steam-saat-releases.git",
+  "private": true,
+  "description": "Yerel Steam oturumu ve FiveM kisayolu",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "dist": "electron-builder --win nsis --x64 --publish never",
+    "check": "node scripts/check.cjs"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": { "steam-user": "5.3.0", "electron-updater": "6.8.12" },
+  "devDependencies": { "electron": "45.1.0", "electron-builder": "26.18.1" },
+  "build": {
+    "appId": "SteamSaat.Desktop",
+    "productName": "Steam Saat",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "package.json"],
+    "asar": true,
+    "asarUnpack": ["src/worker.cjs"],
+    "win": { "target": ["nsis"], "artifactName": "SteamSaat-${version}-Setup.${ext}", "verifyUpdateCodeSignature": false },
+    "nsis": { "oneClick": false, "perMachine": false, "allowElevation": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "deleteAppDataOnUninstall": false, "installerLanguages": ["tr_TR"] },
+    "publish": [{ "provider": "github", "owner": "aksoysavas4422-hue", "repo": "steam-saat-releases", "releaseType": "release" }]
+  }
+}
