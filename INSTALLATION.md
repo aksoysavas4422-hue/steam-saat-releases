@@ -1,6 +1,6 @@
 # Using Steam Hours
 
-1. Download [SteamHours.exe](https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest/download/SteamHours.exe).
+1. Open the [GitHub Releases page](https://github.com/aksoysavas4422-hue/steam-saat-releases/releases).
 2. Close any previous version and open the downloaded file. First-launch preparation runs in the background; the dashboard opens when ready.
 3. Choose a language using the flags at the top right. English, Turkish, Russian and Simplified Chinese are included locally.
 4. Sign in to Steam inside the app and complete Steam Guard if requested. Your password and Guard code are not saved.
