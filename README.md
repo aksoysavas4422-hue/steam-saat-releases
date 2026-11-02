@@ -4,7 +4,7 @@ A Windows desktop app for managing a local Steam session, choosing games and che
 
 ## Download
 
-### [Download SteamHours.exe for Windows](https://github.com/aksoysavas4422-hue/steam-saat-releases/releases/latest/download/SteamHours.exe)
+### [View Windows releases](https://github.com/aksoysavas4422-hue/steam-saat-releases/releases)
 
 **Download `SteamHours.exe` and open it.** The first launch prepares the app in the background and opens the dashboard. Later launches open the app directly. You do not need Node.js, a terminal or a setup wizard.
 
